@@ -1,0 +1,4 @@
+pyresparser
+fitz
+PyMuPDF
+pypdf2
