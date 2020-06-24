@@ -2,3 +2,5 @@ pyresparser
 fitz
 PyMuPDF
 pypdf2
+pprint
+re
