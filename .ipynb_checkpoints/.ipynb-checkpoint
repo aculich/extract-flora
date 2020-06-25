@@ -1,0 +1,361 @@
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "!pip install pyresparser fitz PyMuPDF pypdf2 >/dev/null"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "!ln -s \"NOUVELLE FLORE DU LIBAN ET DE LA SYRIE.pdf\" document.pdf"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import fitz\n",
+    "document = 'document.pdf'\n",
+    "filename = document\n",
+    "search_term = \"the\"\n",
+    "pdf_document = fitz.open(filename)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "doc = pdf_document\n",
+    "dir(doc)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "doc.getToC()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "doc.searchPageFor(528, 'Pteranthus')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# https://pymupdf.readthedocs.io/en/latest/faq/#how-to-analyze-font-characteristics\n",
+    "\n",
+    "import fitz\n",
+    "import pprint, re\n",
+    "\n",
+    "def flags_decomposer(flags):\n",
+    "    \"\"\"Make font flags human readable.\"\"\"\n",
+    "    l = []\n",
+    "    if flags & 2 ** 0:\n",
+    "        l.append(\"superscript\")\n",
+    "    if flags & 2 ** 1:\n",
+    "        l.append(\"italic\")\n",
+    "    if flags & 2 ** 2:\n",
+    "        l.append(\"serifed\")\n",
+    "    else:\n",
+    "        l.append(\"sans\")\n",
+    "    if flags & 2 ** 3:\n",
+    "        l.append(\"monospaced\")\n",
+    "    else:\n",
+    "        l.append(\"proportional\")\n",
+    "    if flags & 2 ** 4:\n",
+    "        l.append(\"bold\")\n",
+    "    return \", \".join(l)\n",
+    "\n",
+    "\n",
+    "doc = fitz.open(\"document.pdf\")\n",
+    "page = doc[528]"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "#header = 'Family\tGenus\tepithet\tauthor\tsyn.\tPlate\tdescription\tFloraison from\tFloraison to\tFloraison notes\tL.\tS.\tAire géogr.\tNotes'\n",
+    "header = 'Family\tGenus\tepithet\tauthor\tsyn.\tPlate\tdescription\tFloraison\tL.\tS.\tAire géogr.\tNotes'\n",
+    "columns = header.split('\t')\n",
+    "columns"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "class Face:\n",
+    "    def __init__(self, font, size, color, flags=0):\n",
+    "        self.font = font\n",
+    "        self.size = size\n",
+    "        self.color = color\n",
+    "        self.flags = flags\n",
+    "        self.style = flags_decomposer(self.flags)\n",
+    "    def __str__(self):\n",
+    "        return f\"Font: '{self.font}' ({self.style}), size {self.size:g}, color \" + (\"#%06x\" % self.color)\n",
+    "print(Face(\"Times\",10.929, 0, 4))\n",
+    "\n",
+    "def isfamily(t, fp):\n",
+    "    font = \"Font: 'Times-Roman' (serifed, proportional), size 10.9449, color #000000\"\n",
+    "    if re.match('^[A-Z]+$', t) or str(font) == fp:\n",
+    "        #print(f'''Text: {t}\\n{fp}\\n\\n''')\n",
+    "        return True\n",
+    "data = {}\n",
+    "item = dict.fromkeys(columns)\n",
+    "print(item)\n",
+    "p = (doc[x] for x in range(516,604))\n",
+    "p = (doc[x] for x in range(527,604))\n",
+    "p"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import re\n",
+    "\n",
+    "def floraison(doc, pagenum=0, block_start=0):\n",
+    "    for page in next(p):\n",
+    "        blocks = page.getText(\"dict\", flags=11)[\"blocks\"]\n",
+    "        for x,b in enumerate(blocks[block_start:]):  # iterate through the text blocks\n",
+    "            for y,l in enumerate(b[\"lines\"]):  # iterate through the text lines\n",
+    "                for z,s in enumerate(l[\"spans\"]):  # iterate through the text spans\n",
+    "                    s[\"style\"] = flags_decomposer(s[\"flags\"])  # readable font flags\n",
+    "                    face = Face(s[\"font\"], s[\"size\"], s[\"color\"], s[\"flags\"])\n",
+    "                    if re.match(\"Floraison\", s[\"text\"]):\n",
+    "                        yield (page.number, x, y, z, s[\"text\"])\n",
+    "\n",
+    "p = (doc[x] for x in range(516,540))\n",
+    "next(floraison(doc, x))"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "p = (doc[x] for x in range(527,604))\n",
+    "p"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "page.number"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "page = next(p)\n",
+    "# read page text as a dictionary, suppressing extra spaces in CJK fonts\n",
+    "blocks = page.getText(\"dict\", flags=11)[\"blocks\"]\n",
+    "for x,b in enumerate(blocks):  # iterate through the text blocks\n",
+    "    for y,l in enumerate(b[\"lines\"]):  # iterate through the text lines\n",
+    "        for z,s in enumerate(l[\"spans\"]):  # iterate through the text spans\n",
+    "            s[\"style\"] = flags_decomposer(s[\"flags\"])  # readable font flags\n",
+    "            face = Face(s[\"font\"], s[\"size\"], s[\"color\"], s[\"flags\"])\n",
+    "            if isfamily(s[\"text\"], face) and len(l[\"spans\"]) == 1:\n",
+    "                item['Family'] = s[\"text\"]\n",
+    "                print(x, len(blocks), y, z, s[\"text\"], face)\n",
+    "                break\n",
+    "            if not item['Family']:\n",
+    "                break\n",
+    "            if s['font'] == 'Times-Bold':\n",
+    "                item['Genus'], *item['epithet'] = s[\"text\"].split(' ')\n",
+    "                item['epithet'] = item['epithet'][0] if item['epithet'] else l[\"spans\"][1][\"text\"]\n",
+    "                currsize = s['size']\n",
+    "#                print(x, len(blocks), y, z, s[\"text\"], font_properties)\n",
+    "                print(x, len(blocks), y, len(b[\"lines\"]), z, s[\"text\"], face)\n",
+    "                nn, xx, yy, zz, tt = next(floraison(page, x))\n",
+    "                item['Floraison'] = tt\n",
+    "#                 for q in range(x, max(x+15, len(blocks))):\n",
+    "#                     for ll in blocks[q][\"lines\"]:\n",
+    "#                         s = ll[\"spans\"][0]\n",
+    "#                         text, *rest = s['text'].split(' ')\n",
+    "#                         if text == \"Floraison:\":\n",
+    "#                             face = Face(s[\"font\"], s[\"size\"], s[\"color\"], s[\"flags\"])\n",
+    "#                             print(face, s['text'])\n",
+    "#                             for ss in ll[\"spans\"]:\n",
+    "#                                 #print(ss['text'], end=\" \")\n",
+    "#                                 pass\n",
+    "                from pprint import pprint\n",
+    "                print(x, len(blocks), y, z, pprint(item))\n",
+    "                #print([a[\"text\"] for a in l[\"spans\"]])\n",
+    "                print(); print(); \n",
+    "                break\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "search = ((x, doc.searchPageFor(x, \"Floraison\", 100, False)) for x in range(516,520))"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "next(search)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "p = (doc[x] for x in range(516,520))"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "page = next(p)\n",
+    "rects = page.searchFor(\"Floraison\")\n",
+    "rects[0]"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "page.getTextBlocks()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "d = iter(doc)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "next(d).getTextBlocks()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "doc[621].getTextBlocks()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "doc[621].getText()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "page.getFontList()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.7.4"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 2
+}
